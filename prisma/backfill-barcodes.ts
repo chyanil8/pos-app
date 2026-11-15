@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { skuToBarcode } from "../src/lib/barcode.ts";
-import { PrismaClient } from "../src/generated/prisma/client.ts";
+import { skuToBarcode } from "../src/lib/barcode";
+import { PrismaClient } from "../src/generated/prisma/client";
 
 // One-off: assign a deterministic EAN-13 barcode to every product that lacks
 // one. Idempotent — codes are a pure function of the SKU, and rows that already

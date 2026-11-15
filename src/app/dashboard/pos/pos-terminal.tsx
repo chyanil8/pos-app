@@ -126,6 +126,15 @@ export function PosTerminal({ initialProducts, taxRate }: Props) {
     );
   }
 
+  // Enter in the search box (barcode-scan "add on scan"): add the first match.
+  function handleSearchSubmit() {
+    const first = products[0];
+    if (first) {
+      addToCart(first);
+      setQuery("");
+    }
+  }
+
   function remove(productId: string) {
     setLines((prev) => prev.filter((l) => l.productId !== productId));
   }
@@ -223,11 +232,13 @@ export function PosTerminal({ initialProducts, taxRate }: Props) {
             products={products}
             query={query}
             onQueryChange={setQuery}
+            onSubmit={handleSearchSubmit}
             loading={loading}
             error={error}
             onRetry={() => runSearch(query.trim())}
             onAdd={addToCart}
             inCartQty={inCartQty}
+            inputRef={searchInputRef}
           />
         </div>
 
@@ -239,6 +250,7 @@ export function PosTerminal({ initialProducts, taxRate }: Props) {
             onPaymentMethodChange={setPaymentMethod}
             onIncrement={increment}
             onDecrement={decrement}
+            onSetQuantity={setQuantity}
             onRemove={remove}
             onClear={clearCart}
             onCheckout={checkout}

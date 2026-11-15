@@ -5,9 +5,9 @@ import {
   SaleStatus,
   StockMovementType,
   UserRole,
-} from "../src/generated/prisma/enums.ts";
-import { PrismaClient } from "../src/generated/prisma/client.ts";
-import { skuToBarcode } from "../src/lib/barcode.ts";
+} from "../src/generated/prisma/enums";
+import { PrismaClient } from "../src/generated/prisma/client";
+import { skuToBarcode } from "../src/lib/barcode";
 
 // Dev seed for exercising the dashboard. Wipes the domain tables and recreates a
 // small single-store catalog with users, products (some intentionally low / out
