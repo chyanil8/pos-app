@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  stripe: ^23.0.0
+
 importers:
 
   .:
@@ -22,7 +25,7 @@ importers:
         version: 7.10.0(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3))(typescript@5.9.3)
       '@stripe/terminal-js':
         specifier: ^0.26.0
-        version: 0.26.0
+        version: 0.26.0(@types/node@20.19.43)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -2564,10 +2567,6 @@ packages:
       '@types/node':
         optional: true
 
-  stripe@8.222.0:
-    resolution: {integrity: sha512-hrA79fjmN2Eb6K3kxkDzU4ODeVGGjXQsuVaAPSUro6I9MM3X+BvIsVqdphm3BXWfimAGFvUqWtPtHy25mICY1w==}
-    engines: {node: ^8.1 || >=10.*}
-
   styled-jsx@5.1.6:
     resolution: {integrity: sha512-qSVyDTeMotdvQYoHWLNGwRFJHC+i+ZvdBRYosOFgC+Wg1vx4frN2/RG/NA7SYqqvKNLf39P2LSRA2pu6n0XYZA==}
     engines: {node: '>= 12.0.0'}
@@ -3547,11 +3546,12 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@stripe/terminal-js@0.26.0':
+  '@stripe/terminal-js@0.26.0(@types/node@20.19.43)':
     dependencies:
-      stripe: 8.222.0
+      stripe: 23.0.0(@types/node@20.19.43)
       ws: 6.2.3
     transitivePeerDependencies:
+      - '@types/node'
       - bufferutil
       - utf-8-validate
 
@@ -5123,11 +5123,6 @@ snapshots:
   stripe@23.0.0(@types/node@20.19.43):
     optionalDependencies:
       '@types/node': 20.19.43
-
-  stripe@8.222.0:
-    dependencies:
-      '@types/node': 20.19.43
-      qs: 6.16.1
 
   styled-jsx@5.1.6(@babel/core@7.29.7)(react@19.3.0):
     dependencies:

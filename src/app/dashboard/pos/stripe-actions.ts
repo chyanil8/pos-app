@@ -47,7 +47,7 @@ export async function createTerminalPaymentIntent(
       {
         amount: total.totalCents,
         currency: "usd",
-        payment_method_types: ["card_present"],
+        allowed_payment_method_types: ["card_present"],
         capture_method: "manual",
       },
       { idempotencyKey: `pi_${idempotencyKey}` },

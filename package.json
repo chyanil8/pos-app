@@ -45,5 +45,10 @@
     "tsx": "^4.23.15",
     "typescript": "^5"
   },
-  "packageManager": "pnpm@10.26.2"
+  "packageManager": "pnpm@10.26.2",
+  "pnpm": {
+    "overrides": {
+      "stripe": "^23.0.0"
+    }
+  }
 }
