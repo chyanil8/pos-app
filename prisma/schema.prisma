@@ -1,0 +1,241 @@
+// Inventory Management + POS schema (single-store v1).
+// Prisma ORM 7 · PostgreSQL (Neon) · driver adapter: @prisma/adapter-pg.
+//
+// Design notes:
+// - Money is Decimal(12,2); whole-unit quantities are Int.
+// - Products are soft-deleted (isActive) and never hard-deleted while referenced
+//   by sale/purchase/stock history (onDelete: Restrict on those relations).
+// - StockMovement is an append-only audit ledger: one row per stock change.
+//   Positive quantity = stock in, negative = stock out, balanceAfter = resulting stock.
+// - Multi-store is intentionally out of scope for v1 (see summary). Adding it later
+//   means a Store model plus a storeId on Product stock, Sale, Purchase, StockMovement
+//   and most unique/index tuples — a breaking change best done deliberately.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  CASHIER
+  INVENTORY_STAFF
+}
+
+enum PurchaseStatus {
+  DRAFT
+  RECEIVED
+  CANCELLED
+}
+
+enum SaleStatus {
+  COMPLETED
+  VOIDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  OTHER
+}
+
+enum StockMovementType {
+  PURCHASE
+  SALE
+  CUSTOMER_RETURN
+  SUPPLIER_RETURN
+  ADJUSTMENT
+  DAMAGE
+}
+
+model User {
+  id        String   @id @default(cuid())
+  // Clerk owns authentication; this links our app row to the Clerk user.
+  // Nullable so seed/legacy rows remain valid; unique so each Clerk user maps once.
+  clerkId   String?  @unique
+  name      String
+  email     String   @unique
+  role      UserRole @default(CASHIER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sales          Sale[]
+  purchases      Purchase[]
+  stockMovements StockMovement[]
+
+  @@index([role])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products  Product[]
+  purchases Purchase[]
+
+  @@index([name])
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  name         String
+  sku          String   @unique
+  // Nullable + @unique: Postgres treats NULLs as distinct, so "unique when provided".
+  barcode      String?  @unique
+  description  String?
+  costPrice    Decimal  @default(0) @db.Decimal(12, 2)
+  sellingPrice Decimal  @db.Decimal(12, 2)
+  quantity     Int      @default(0)
+  reorderLevel Int      @default(0)
+  categoryId   String?
+  supplierId   String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  saleItems      SaleItem[]
+  purchaseItems  PurchaseItem[]
+  stockMovements StockMovement[]
+
+  @@index([name])
+  @@index([categoryId])
+  @@index([supplierId])
+  // Low-stock scans: filter active products, compare quantity to reorderLevel.
+  @@index([isActive, quantity])
+}
+
+model Purchase {
+  id             String         @id @default(cuid())
+  purchaseNumber String         @unique
+  supplierId     String
+  createdById    String
+  status         PurchaseStatus @default(DRAFT)
+  subtotal       Decimal        @default(0) @db.Decimal(12, 2)
+  tax            Decimal        @default(0) @db.Decimal(12, 2)
+  total          Decimal        @default(0) @db.Decimal(12, 2)
+  notes          String?
+  receivedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  supplier  Supplier        @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdBy User            @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  items     PurchaseItem[]
+  movements StockMovement[]
+
+  @@index([supplierId])
+  @@index([createdById])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PurchaseItem {
+  id         String  @id @default(cuid())
+  purchaseId String
+  productId  String
+  quantity   Int
+  unitCost   Decimal @db.Decimal(12, 2)
+  subtotal   Decimal @db.Decimal(12, 2)
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  // One line per product per purchase; merge quantities instead of duplicating.
+  @@unique([purchaseId, productId])
+  @@index([productId])
+}
+
+model Sale {
+  id             String        @id @default(cuid())
+  saleNumber     String        @unique
+  // Optional client-supplied key to make checkout idempotent (dedupe retries).
+  idempotencyKey String?       @unique
+  // Stripe Terminal PaymentIntent backing a CARD sale, captured after the sale
+  // is recorded. Unique so a PaymentIntent maps to at most one sale. Null for
+  // cash and other non-terminal payments.
+  stripePaymentIntentId String? @unique
+  status         SaleStatus    @default(COMPLETED)
+  paymentMethod  PaymentMethod @default(CASH)
+  createdById    String
+  subtotal       Decimal       @default(0) @db.Decimal(12, 2)
+  tax            Decimal       @default(0) @db.Decimal(12, 2)
+  discount       Decimal       @default(0) @db.Decimal(12, 2)
+  total          Decimal       @default(0) @db.Decimal(12, 2)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  createdBy User            @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  items     SaleItem[]
+  movements StockMovement[]
+
+  @@index([createdById])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id          String  @id @default(cuid())
+  saleId      String
+  productId   String
+  // Snapshot of name/price at checkout; survives later product edits.
+  productName String
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(12, 2)
+  subtotal    Decimal @db.Decimal(12, 2)
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+model StockMovement {
+  id           String       @id @default(cuid())
+  productId    String
+  type         StockMovementType
+  quantity     Int // signed: + = received, - = removed
+  balanceAfter Int
+  reason       String?
+  userId       String?
+  saleId       String?
+  purchaseId   String?
+  createdAt    DateTime     @default(now())
+
+  product  Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sale     Sale?     @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  purchase Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  @@index([productId, createdAt])
+  @@index([createdAt])
+  @@index([type])
+  @@index([saleId])
+  @@index([purchaseId])
+}
